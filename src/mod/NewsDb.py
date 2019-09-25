@@ -3,8 +3,7 @@ import os
 import operator
 
 class NewsDb:
-    def __init__(self, root):
-        path = os.path.join(root, 'news.db')
+    def __init__(self, path):
         self.conn = sqlite3.connect(path)
 #        self.conn.row_factory = sqlite3.Row
         self.create_table()
