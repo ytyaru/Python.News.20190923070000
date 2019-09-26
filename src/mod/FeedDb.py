@@ -10,19 +10,20 @@ class FeedDb:
         self.conn = sqlite3.connect(':memory:')
         self.conn.cursor().execute("attach '"+path+"' as '"+self.__schema_ram+"';")
 #        self.conn = sqlite3.connect(path)
-#        self.conn.row_factory = sqlite3.Row
+        self.conn.row_factory = sqlite3.Row
         self.__create_table()
         self.__create_table(schema_name=self.__schema_ram)
+        self.__latest_row = self.__get_latest_row(schema_name=self.__schema_ram)
         self.news = []
     def __del__(self): self.conn.close()
+    @property
+    def LatestRow(self): return self.__latest_row
     # schema_name: main, temp, (attach-db-name)
     def __schema_name(self, schema_name=None): return (
         '' if schema_name is None or 0 == len(schema_name) else (schema_name 
            if schema_name.endswith('.') else schema_name + '.'))
     def __create_table(self, schema_name=''):
         cur = self.conn.cursor()
-        print(schema_name)
-        print(self.__create_table_sql(schema_name=schema_name))
         cur.executescript(self.__create_table_sql(schema_name=schema_name))
     def __create_table_sql(self, schema_name=''):
         return '''
@@ -43,7 +44,7 @@ with
   maximum(max_id) as (
     select max(id) as max_id
     from {schema_name}news,latest
-    where {schema_name}news.published=latest.max_published;
+    where {schema_name}news.published=latest.max_published
   )
 select 
   {schema_name}news.published, 
@@ -51,11 +52,28 @@ select
   {schema_name}news.title
 from {schema_name}news,maximum
 where {schema_name}news.id=maximum.max_id;
-'''.format(schema_name=schema_name)
+'''.format(schema_name=self.__schema_name(schema_name))
+    def __get_latest_row(self, schema_name=''):
+        return self.conn.cursor().execute(self.__get_latest_sql(schema_name=self.__schema_ram)).fetchone()
     def __insert_sql(self, schema_name=''): 
         return 'insert or ignore into {schema_name}news(published,url,title,summary) values(?,?,?,?)'.format(schema_name=self.__schema_name(schema_name))
     def append_news(self, published, url, title, summary=''):
+#        if self.__latest_row is not None: return
+#        if self.__latest_row['published'] <= published: return
+#        if self.__latest_row['url'] == url: return
         self.news.append((published, url, title, summary))
+    def __get_news_sql(self, schema_name='', published=''):
+        where = ''
+        if published is not None and 0 < len(published.strip()): 
+            where = " where published > '" + published + "'"
+        return 'select published,url,title from {schema_name}news {where};'.format(schema_name=self.__schema_name(schema_name), where=where)
+#    # 今回取得した全フィード
+#    @property
+#    def News(self):
+#        return self.conn.cursor().execute(self.__get_news_sql()).fetchall()
+    # 今回取得した全フィードのうち指定日時より新しいニュースのみ返す
+    def get_news(self, published):
+        return self.conn.cursor().execute(self.__get_news_sql(published=published)).fetchall()
     def insert(self):
         if 0 == len(self.news): return
         try:
@@ -78,6 +96,7 @@ where {schema_name}news.id=maximum.max_id;
         try:
             self.conn.cursor().execute(self.__marge_sql())
             self.conn.commit()
+            self.__latest_row = self.__get_latest_row(schema_name=self.__schema_ram)
         except sqlite3.IntegrityError as err_sql_integ:
             import traceback
             import sys

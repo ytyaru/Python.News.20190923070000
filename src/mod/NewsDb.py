@@ -44,6 +44,9 @@ select
 from news,latest
 where news.published=latest.max_published;
 '''
+    @property
+    def LatestPublished(self):
+        return (self.conn.cursor().execute(self.__get_latest_sql()).fetchone()[0])
     def is_exists(self, published, url):
         count = (self.conn.cursor().execute(
             'select count(*) from news where published=? and url=?;'

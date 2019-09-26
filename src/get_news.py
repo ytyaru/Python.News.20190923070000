@@ -46,6 +46,22 @@ for feed in feeds:
     feed_db.insert() # :memory:へ
 feed_db.marge() # 指定パスへ
 
+# 取得したフィードのうちDB内の最新日時より新しいエントリのみ取得する
+news_db = NewsDb.NewsDb(db_dir_path)
+newer_entries = feed_db.get_news(news_db.LatestPublished)
+print('len(newer_entries): {}'.format(len(newer_entries)))
+
+# ファイルDBへ挿入する（本文抽出も）
+extractor = HtmlContentExtractor.HtmlContentExtractor(option={"threshold":50})
+getter = HtmlGetter.HtmlGetter()
+for entry in newer_entries:
+    url, html = getter.get(entry['url']) # 「続きを読む」があればURLが変わる
+    body = extractor.extract(html)
+#    body = extractor.extract(getter.get(entry['url']))
+    news_db.append_news(entry['published'], url, entry['title'], body);
+news_db.insert();
+
+"""
 # 本文抽出
 for rss in feeds:
     entries = feedparser.parse(rss).entries
@@ -67,4 +83,5 @@ for rss in feeds:
         news_db.append_news(published, url, title, body);
     #    break; # HTML取得を1件だけでやめる
     news_db.insert();
+"""
 
